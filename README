@@ -1,0 +1,497 @@
+LALIGNE TP3 - Sécurité Linux
+============================
+
+## EX1 - PAM (Authentification par Module PAM)
+
+### Objectif
+Configurer une politique de mots de passe système requérant :
+- Minimum 9 caractères
+- Au moins 1 majuscule
+- Au moins 1 minuscule
+- Au moins 1 chiffre
+- Au moins 1 caractère spécial
+
+### Installations
+```bash
+apt-get install libpam-pwquality libpam-passwdqc
+```
+
+### Configuration libpwquality (ex1/libpwquality/common-password)
+```
+minlen=9
+dcredit=-1
+ucredit=-1
+lcredit=-1
+ocredit=-1
+```
+**Explication :**
+- `minlen=9` : longueur minimale de 9 caractères
+- `dcredit=-1` : au moins 1 chiffre requis
+- `ucredit=-1` : au moins 1 majuscule requise
+- `lcredit=-1` : au moins 1 minuscule requise
+- `ocredit=-1` : au moins 1 caractère spécial requis
+
+### Configuration passwdqc (ex1/passwdqc/common-password)
+```
+min=9,9,9,9,9
+```
+**Explication :**
+Les 5 paramètres représentent les longueurs minimales pour :
+1. Combinaisons simples (majuscules/minuscules/chiffres)
+2. Combinaisons avec caractères spéciaux
+3. Mots de passe avec 4 classes de caractères
+4. Réseau
+5. Mot de passe aléatoire
+Tous à 9 pour garantir une longueur minimale de 9.
+
+---
+
+## EX2 - AppArmor (Contrôle d'Accès Obligatoire)
+
+### Objectif
+Empêcher l'accès au répertoire `/boot/` avec la commande `/usr/local/bin/ls` tout en autorisant l'accès au reste du système.
+
+### Préparation
+```bash
+apt-get install apparmor-utils
+cp /bin/ls /usr/local/bin/ls
+```
+
+### Profil AppArmor (ex2/usr.local.bin.ls)
+```
+#include <tunables/global>
+
+/usr/local/bin/ls {
+  #include <abstractions/base>
+
+  /usr/local/bin/ls mr,
+
+  # Allow reading most directories
+  / r,
+  /** r,
+
+  # Deny reading /boot directory only
+  deny /boot/ r,
+  deny /boot/** r,
+}
+```
+
+**Explication :**
+- `#include <abstractions/base>` : Abstractions standard Linux
+- `/usr/local/bin/ls mr` : Lecture et exécution du binaire
+- `/ r, /** r,` : Lecture récursive de tout le système
+- `deny /boot/ r, deny /boot/** r,` : Interdiction explicite d'accès au répertoire `/boot/` et ses sous-répertoires
+
+### Application du profil
+```bash
+sudo cp ex2/usr.local.bin.ls /etc/apparmor.d/
+sudo apparmor_parser -r /etc/apparmor.d/usr.local.bin.ls
+```
+
+---
+
+## EX3 - AIDE (Contrôle d'Intégrité des Fichiers)
+
+### Objectif
+Mettre en place un système de détection des modifications d'intégrité des fichiers critiques du système.
+
+### Installation
+```bash
+apt-get install aide aide-common
+```
+
+### Partie 1 : Configuration AIDE (ex3/aide.conf)
+```
+# Configuration for AIDE - File Integrity Monitoring
+
+# Checksums to use
+CHECKSUMS = md5+sha256
+
+# /etc - check data, rights, owner/group, ctime, mtime
+/etc R+b+sha256+md5
+
+# /var/{lib,www,log} - check rights, owner/group
+/var/lib L+p+u+g+sha256+md5
+/var/www L+p+u+g+sha256+md5
+/var/log L+p+u+g+sha256+md5
+
+# /{usr,}/{{s,}bin,lib*} - check data, rights, owner/group, ctime, mtime
+/bin R+b+sha256+md5
+/sbin R+b+sha256+md5
+/usr/bin R+b+sha256+md5
+/usr/sbin R+b+sha256+md5
+/lib R+b+sha256+md5
+/lib64 R+b+sha256+md5
+/usr/lib R+b+sha256+md5
+/usr/lib64 R+b+sha256+md5
+
+# /root/*, /home/* - check owner/group
+/root L+p+u+g+sha256+md5
+/home L+p+u+g+sha256+md5
+```
+
+**Explication des attributs :**
+- `R` : Récursif
+- `b` : Taille du fichier
+- `L` : Lien symbolique
+- `p` : Permissions
+- `u` : UID (propriétaire)
+- `g` : GID (groupe)
+- `sha256+md5` : Sommes de contrôle
+
+### Partie 2 : Initialisation de la base de données (ex3/aide.db)
+```
+aideinit -c /home/user/LALIGNE_TP3/ex3/aide.conf -o /var/lib/aide/aide.db.new && sudo mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db
+```
+
+**Exécution :**
+```bash
+sudo mkdir -p /var/lib/aide
+sudo aideinit -c ex3/aide.conf -o /var/lib/aide/aide.db -y
+```
+
+### Partie 3 : Tâche Cron (ex3/aide)
+```
+# Run AIDE integrity check every 10 minutes
+*/10 * * * * root aide --config=/home/user/LALIGNE_TP3/ex3/aide.conf --check
+```
+
+**Format crontab :**
+- `*/10` : Toutes les 10 minutes
+- `*` : Chaque heure, jour, mois, jour de la semaine
+- `root` : Utilisateur d'exécution
+- La commande lance une vérification AIDE
+
+**Déploiement :**
+```bash
+sudo cp ex3/aide /etc/cron.d/aide
+```
+
+---
+
+## EX4 - Lynis (Audit de Sécurité Système)
+
+### Objectif
+Créer un profil de sécurité personnalisé pour Lynis limitant les tests aux catégories critiques.
+
+### Installation
+```bash
+cd /tmp
+git clone https://github.com/CISOfy/lynis.git
+sudo /tmp/lynis/lynis audit system  # Test d'exécution
+```
+
+### Partie 1 : Prise en main
+```bash
+/tmp/lynis/lynis audit system
+```
+
+### Partie 2 : Profil ESIEE (ex4/esiee.prf)
+```
+# Lynis ESIEE Profile
+# Only runs mac_frameworks, file_integrity, and authentication tests
+
+# Enable only specific test categories
+skip-test=KRNL
+skip-test=PKGS
+skip-test=NETW
+skip-test=PRNT
+skip-test=ACCT
+skip-test=TIME
+skip-test=SHLL
+skip-test=SSH
+skip-test=SNMP
+skip-test=SQUID
+skip-test=STOR
+skip-test=SYS
+skip-test=TOOL
+skip-test=USB
+skip-test=XWIN
+skip-test=FWUP
+skip-test=LOGG
+skip-test=MAIL
+skip-test=FIRE
+skip-test=WEB
+skip-test=CRYP
+skip-test=CONT
+skip-test=EDUC
+```
+
+**Explication :**
+- Les tests listés en `skip-test` sont désactivés
+- Les tests conservés : `MAC`, `FILE` (file_integrity), `AUTH` (authentication)
+- Ces trois catégories correspondent aux cadres MAC, intégrité des fichiers et authentification
+
+**Utilisation :**
+```bash
+/tmp/lynis/lynis audit system --profile ex4/esiee.prf
+```
+
+### Partie 3 : Plugin ESIEE (ex4/plugin_esiee)
+```bash
+#!/bin/bash
+# ESIEE Plugin for Lynis
+# Checks for the existence of the AIDE cron file
+
+# Test ID
+TEST_ID="ESIEE-0001"
+TEST_NAME="AIDE Cron File Check"
+
+# Description
+TEST_DESCRIPTION="Check if AIDE cron file exists at /etc/cron.d/aide"
+
+# Run the test
+if [ -f /etc/cron.d/aide ]; then
+    Result="PASSED"
+    DisplayResult=""
+else
+    Result="WARNING"
+    DisplayResult="AIDE cron file not found at /etc/cron.d/aide"
+fi
+
+# Report result
+Report "[${TEST_ID}] ${TEST_NAME}"
+
+if [ "${Result}" = "PASSED" ]; then
+    AddResult PASS TEST_NAME "AIDE cron file found"
+elif [ "${Result}" = "WARNING" ]; then
+    AddResult WARN TEST_NAME "AIDE cron file not found"
+fi
+```
+
+**Déploiement :**
+```bash
+sudo cp ex4/plugin_esiee /etc/lynis/plugins/
+sudo chmod +x /etc/lynis/plugins/plugin_esiee
+```
+
+---
+
+## EX5 - Sudo (Escalade de Privilèges Contrôlée)
+
+### Objectif
+Configurer sudo pour permettre l'escalade de privilèges selon différentes stratégies.
+
+### Installation
+```bash
+apt-get install sudo
+sudo useradd -m jmdev
+sudo groupadd devel
+sudo useradd -m -g devel devuser
+```
+
+### Configuration 1 : Utilisateur (ex5/jmdev.conf)
+```
+# Allow jmdev user to become administrator
+jmdev ALL=(ALL) ALL
+```
+
+**Explication :**
+- `jmdev` : L'utilisateur cible
+- `ALL` (première occurrence) : Sur toutes les machines/hosts
+- `(ALL)` : Peut exécuter en tant que n'importe quel utilisateur
+- `ALL` (dernière occurrence) : Toutes les commandes
+
+### Configuration 2 : Groupe (ex5/group_devel.conf)
+```
+# Allow members of devel group to become administrator
+%devel ALL=(ALL) ALL
+```
+
+**Explication :**
+- `%devel` : Le groupe devel (préfixe `%` pour groupe)
+- Les membres du groupe peuvent exécuter toutes les commandes en tant qu'admin
+
+### Configuration 3 : Exécution comme autre utilisateur (ex5/local.conf)
+```
+# Allow members of devel group to execute programs in /usr/local/bin as local user
+%devel ALL=(local) /usr/local/bin/*
+```
+
+**Explication :**
+- `(local)` : Exécution en tant qu'utilisateur `local`
+- `/usr/local/bin/*` : Seulement les programmes dans ce répertoire
+
+### Configuration 4 : Liste blanche (ex5/whitelist.conf)
+```
+# Whitelist - Allow devel group specific commands only
+%devel ALL=(ALL) /usr/sbin/reboot
+%devel ALL=(ALL) /usr/sbin/ip link add link eth0 name eth0.10 type vlan id 10
+%devel ALL=(ALL) /usr/sbin/tcpdump
+```
+
+**Explication :**
+- Seules ces trois commandes spécifiques sont autorisées
+- Les autres commandes seront refusées
+- Format : `%groupe ALL=(utilisateur) commande_complète`
+
+### Déploiement
+```bash
+# Copier dans /etc/sudoers.d/
+sudo cp ex5/jmdev.conf /etc/sudoers.d/jmdev
+sudo cp ex5/group_devel.conf /etc/sudoers.d/group_devel
+sudo cp ex5/local.conf /etc/sudoers.d/local
+sudo cp ex5/whitelist.conf /etc/sudoers.d/whitelist
+
+# Vérifier la syntaxe
+sudo visudo -c
+```
+
+---
+
+## EX6 - Auditd (Système d'Audit Système)
+
+### Objectif
+Mettre en place un audit système pour surveiller les modifications du fichier `/etc/passwd`.
+
+### Installation et activation
+```bash
+apt-get install auditd audispd-plugins
+sudo systemctl enable auditd
+sudo systemctl start auditd
+```
+
+### Partie 1 : Règles d'audit (ex6/passwd.rules)
+```
+# Monitor /etc/passwd file
+-w /etc/passwd -p wa -k passwd_monitoring
+```
+
+**Explication de la syntaxe :**
+- `-w` : Watch (surveiller) un fichier
+- `/etc/passwd` : Le fichier à surveiller
+- `-p wa` : Surveiller les accès Write (w) et Attribute change (a)
+- `-k passwd_monitoring` : Tag/clé pour identifier les événements
+
+### Chargement des règles
+```bash
+sudo mkdir -p /etc/audit/rules.d
+sudo cp ex6/passwd.rules /etc/audit/rules.d/passwd.rules
+sudo augenrules --load
+```
+
+### Partie 2 : Génération et analyse d'événement (ex6/search_command.txt)
+```
+sudo ausearch -k passwd_monitoring
+```
+
+**Procédure :**
+```bash
+# Générer un événement (modification de l'horodatage)
+sudo touch /etc/passwd
+
+# Rechercher l'événement
+sudo ausearch -k passwd_monitoring
+```
+
+**Résultat exemple :**
+```
+----
+time->Wed Nov 19 16:50:25 2025
+type=SYSCALL msg=audit(1763567425.032:210): arch=c000003e syscall=257 success=yes 
+  exit=3 a0=ffffffffffffff9c a1=7ffc6b7f76df a2=941 a3=1b6 items=1 ppid=24505 
+  pid=24506 auid=1000 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 
+  tty=pts32 ses=3 comm="touch" exe="/usr/bin/touch" subj=unconfined key="passwd_monitoring"
+```
+
+**Informations extraites :**
+- **Utilisateur d'origine** : auid=1000 (utilisateur qui a lancé la commande)
+- **Syscall** : syscall=257 (openat syscall)
+- **Type d'événement** : SYSCALL
+- **Date/heure** : Wed Nov 19 16:50:25 2025
+- **Commande exécutée** : comm="touch", exe="/usr/bin/touch"
+
+### Partie 3 : Rapport auditd (ex6/report_command.txt et ex6/report.txt)
+
+#### Commande
+```
+sudo aureport
+```
+
+#### Exécution
+```bash
+sudo aureport > ex6/report.txt
+```
+
+#### Rapport généré (extrait)
+```
+Summary Report
+======================
+Range of time in logs: 19/11/2025 16:49:06.425 - 19/11/2025 16:50:43.320
+Selected time for report: 19/11/2025 16:49:06 - 19/11/2025 16:50:43.320
+Number of changes in configuration: 7
+Number of users: 2
+Number of terminals: 18
+Number of host names: 1
+Number of executables: 4
+Number of commands: 3
+Number of files: 1
+Number of AVC's: 0
+```
+
+**Autres commandes utiles :**
+```bash
+sudo aureport --summary              # Résumé des événements
+sudo aureport --files                # Rapport sur les fichiers
+sudo aureport --syscalls             # Rapport sur les syscalls
+sudo aureport --event                # Rapport par type d'événement
+ausearch -m FILE_CHANGE             # Rechercher les changements de fichiers
+ausearch -ts recent                 # Rechercher les événements récents
+```
+
+---
+
+## Arborescence finale
+
+```
+/home/user/LALIGNE_TP3/
+├── README                           (ce fichier)
+├── ex1/
+│   ├── libpwquality/
+│   │   └── common-password         (config libpwquality)
+│   └── passwdqc/
+│       └── common-password         (config passwdqc)
+├── ex2/
+│   └── usr.local.bin.ls            (profil AppArmor)
+├── ex3/
+│   ├── aide                        (cron job)
+│   ├── aide.conf                   (configuration AIDE)
+│   └── aide.db                     (commande d'initialisation)
+├── ex4/
+│   ├── esiee.prf                   (profil Lynis)
+│   └── plugin_esiee                (plugin personnalisé)
+├── ex5/
+│   ├── jmdev.conf                  (config sudo utilisateur)
+│   ├── group_devel.conf            (config sudo groupe)
+│   ├── local.conf                  (config utilisateur local)
+│   └── whitelist.conf              (liste blanche commands)
+└── ex6/
+    ├── passwd.rules                (règles audit)
+    ├── search_command.txt          (commande ausearch)
+    ├── report_command.txt          (commande aureport)
+    └── report.txt                  (rapport généré)
+```
+
+---
+
+## Résumé des technologies de sécurité
+
+| Exercice | Technologie | Fonction | Type |
+|----------|-------------|----------|------|
+| EX1 | PAM | Authentification | Authentification |
+| EX2 | AppArmor | Contrôle d'accès obligatoire | Contrôle d'accès |
+| EX3 | AIDE | Intégrité des fichiers | Détection de modifications |
+| EX4 | Lynis | Audit de sécurité | Audit et évaluation |
+| EX5 | Sudo | Escalade de privilèges contrôlée | Autorisation |
+| EX6 | Auditd | Audit système en temps réel | Enregistrement et audit |
+
+---
+
+## Notes importantes
+
+1. **PAM** : Gardez toujours une session ouverte lors de la configuration
+2. **AppArmor** : Utilisez le mode `complain` pour développer les profils, puis passez en mode `enforce`
+3. **AIDE** : La première initialisation peut prendre du temps sur les gros systèmes
+4. **Lynis** : À exécuter régulièrement pour auditer la sécurité du système
+5. **Sudo** : Vérifiez toujours la syntaxe avec `visudo -c` avant de déployer
+6. **Auditd** : Les logs auditd peuvent devenir volumineux, pensez à les archiver régulièrement

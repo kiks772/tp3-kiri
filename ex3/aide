@@ -1,0 +1,2 @@
+# Run AIDE integrity check every 10 minutes
+*/10 * * * * root aide --config=/home/user/LALIGNE_TP3/ex3/aide.conf --check

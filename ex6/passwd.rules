@@ -1,0 +1,2 @@
+# Monitor /etc/passwd file
+-w /etc/passwd -p wa -k passwd_monitoring

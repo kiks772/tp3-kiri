@@ -1,0 +1,1 @@
+aideinit -c /home/user/LALIGNE_TP3/ex3/aide.conf -o /var/lib/aide/aide.db.new && sudo mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db

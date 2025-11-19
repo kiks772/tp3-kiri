@@ -1,0 +1,28 @@
+#!/bin/bash
+# ESIEE Plugin for Lynis
+# Checks for the existence of the AIDE cron file
+
+# Test ID
+TEST_ID="ESIEE-0001"
+TEST_NAME="AIDE Cron File Check"
+
+# Description
+TEST_DESCRIPTION="Check if AIDE cron file exists at /etc/cron.d/aide"
+
+# Run the test
+if [ -f /etc/cron.d/aide ]; then
+    Result="PASSED"
+    DisplayResult=""
+else
+    Result="WARNING"
+    DisplayResult="AIDE cron file not found at /etc/cron.d/aide"
+fi
+
+# Report result
+Report "[${TEST_ID}] ${TEST_NAME}"
+
+if [ "${Result}" = "PASSED" ]; then
+    AddResult PASS TEST_NAME "AIDE cron file found"
+elif [ "${Result}" = "WARNING" ]; then
+    AddResult WARN TEST_NAME "AIDE cron file not found"
+fi

@@ -1,0 +1,27 @@
+# Lynis ESIEE Profile
+# Only runs mac_frameworks, file_integrity, and authentication tests
+
+# Enable only specific test categories
+skip-test=KRNL
+skip-test=PKGS
+skip-test=NETW
+skip-test=PRNT
+skip-test=ACCT
+skip-test=TIME
+skip-test=SHLL
+skip-test=SSH
+skip-test=SNMP
+skip-test=SQUID
+skip-test=STOR
+skip-test=SYS
+skip-test=TOOL
+skip-test=USB
+skip-test=XWIN
+skip-test=FWUP
+skip-test=LOGG
+skip-test=MAIL
+skip-test=FIRE
+skip-test=WEB
+skip-test=CRYP
+skip-test=CONT
+skip-test=EDUC
